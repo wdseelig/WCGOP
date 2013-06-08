@@ -3,6 +3,7 @@ CONTENTS OF THIS FILE
 ---------------------
 
 WDS File modification on 6/5/2013
+WDS File modification on 6/8/2013
 
  * About Drupal
  * Configuration and features
