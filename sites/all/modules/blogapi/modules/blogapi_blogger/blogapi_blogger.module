@@ -316,7 +316,7 @@ function blogapi_blogger_services_resources() {
               'type' => 'boolean',
               'description' => 'bodies',
               'source' => array('data' => 'bodies'),
-              'optional' => FALSE,
+              'optional' => TRUE,
             ),
           ),
         ),
@@ -331,10 +331,6 @@ function blogapi_blogger_services_resources() {
 function blogapi_blogger_get_users_blogs($appid, $username, $password) {
   // Validate the user.
   $user = blogapi_validate_user($username, $password);
-  if (is_array($user)) {
-    // Problem logging in. More specific error is included in $user.
-    return services_error($user['message'], $user['error_code']);
-  }
 
   $types = blogapi_get_node_types();
   if (empty($types)) {
@@ -355,25 +351,17 @@ function blogapi_blogger_get_users_blogs($appid, $username, $password) {
 function blogapi_blogger_get_user_info($appid, $username, $password) {
   // Validate the user.
   $user = blogapi_validate_user($username, $password);
-  if (is_array($user)) {
-    // Problem logging in. More specific error is included in $user.
-    return services_error($user['message'], $user['error_code']);
-  }
+
+  // Reload user without services_remove_user_data to get email
+  $user = user_load($user->uid, TRUE);
 
   // Try to guess the user's first and last name.
-  $name = explode(' ', isset($user->realname) ? $user->realname : $user->name, 2);
-
-  // If we can't figure out what their first and last name is, just use their
-  // username.
-  if (count($name) < 2) {
-    $name[0] = $user->name;
-    $name[1] = ' ';
-  }
+  $name = explode(' ', !empty($user->realname) ? $user->realname : $user->name, 2);
 
   return array(
     'userid' => $user->uid,
     'firstname' => $name[0],
-    'lastname' => $name[1],
+    'lastname' => !empty($name[1]) ? $name[1] : '',
     'nickname' => $user->name,
     'email' => $user->mail,
     'url' => url('user/' . $user->uid, array('absolute' => TRUE)),
@@ -384,114 +372,32 @@ function blogapi_blogger_get_user_info($appid, $username, $password) {
  * Service callback for blogger.newPost
  */
 function blogapi_blogger_new_post($appid, $blogid, $username, $password, $content, $publish) {
-  // Validate the user.
-  $user = blogapi_validate_user($username, $password);
-  if (is_array($user)) {
-    // Problem logging in. More specific error is included in $user.
-    return services_error($user['message'], $user['error_code']);
+  $postdata = array(
+    'type' => $blogid,
+    'status' => $publish,
+    'title' => blogapi_blogger_extract_title($content),
+    'body' => blogapi_blogger_extract_body($content),
+  );
+
+  $node_id = blogapi_new_post($username, $password, $postdata);
+
+  if (is_numeric($node_id)) {
+    // If this operation is successful, we're supposed to return a string from
+    // blogger.newPost.
+    return (string)$node_id;
   }
-
-  if (!node_access('create', $blogid, $user)) {
-    return services_error(t('You do not have permission to create this type of post.'), 403);
+  else {
+    // Otherwise, there is a problem, so just pass through what we got back from
+    // blogapi_new_post().
+    return $node_id;
   }
-
-  if (($error = blogapi_validate_content_type($blogid)) !== TRUE) {
-    // Return an error if not configured type.
-    return services_error($error['message'], $error['error_code']);
-  }
-
-  $edit = array();
-  $edit['type'] = $blogid;
-  // Get the node type defaults.
-  $node_type_default = variable_get('node_options_' . $edit['type'], array('status', 'promote'));
-  $edit['uid'] = $user->uid;
-  $edit['name'] = $user->name;
-  $edit['promote'] = in_array('promote', $node_type_default);
-  $edit['comment'] = variable_get('comment_' . $edit['type'], 2);
-  $edit['revision'] = in_array('revision', $node_type_default);
-  $edit['body'][LANGUAGE_NONE][0]['format'] = filter_default_format($user);
-  $edit['status'] = $publish;
-  $edit['title'] = blogapi_blogger_extract_title($content);
-  $edit['body'][LANGUAGE_NONE][0]['value'] = $content;
-  $edit['date'] = format_date(REQUEST_TIME, 'custom', 'Y-m-d H:i:s O');
-
-  module_invoke_all('blogapi_new_post', $edit);
-
-  $valid = blogapi_status_error_check($edit, $publish);
-  if ($valid !== TRUE) {
-    return services_error($valid['message'], $valid['error_code']);
-  }
-
-  // @todo: Fix this function call. I suspect that I'm not using it properly.
-  node_validate($edit);
-  if ($errors = form_get_errors()) {
-    return services_error(implode("; ", $errors), 409);
-  }
-
-  $node = (object) node_submit($edit);
-  node_save($node);
-  if ($node->nid) {
-    watchdog('content', '@type: added %title using BlogAPI.', array('@type' => $node->type, '%title' => $node->title), WATCHDOG_NOTICE, l(t('view'), "node/$node->nid"));
-    // blogger.newPost returns a string so we cast the nid to a string by
-    // putting it in double quotes.
-    return "$node->nid";
-  }
-
-  return services_error(t('Error storing post.'), 500);
 }
 
 /**
  * Service callback for blogger.editPost
  */
 function blogapi_blogger_edit_post($appid, $postid, $username, $password, $content, $publish) {
-  // Validate the user.
-  $user = blogapi_validate_user($username, $password);
-  if (is_array($user)) {
-    // Problem logging in. More specific error is included in $user.
-    return services_error($user['message'], $user['error_code']);
-  }
-
-  $node = node_load($postid);
-  if (!$node) {
-    return services_error(t('Node not found'), 404);
-  }
-  // Let the teaser be re-generated.
-  unset($node->teaser);
-
-  if (!node_access('update', $node, $user)) {
-    return services_error(t('You do not have permission to update this post.', 403));
-  }
-
-  // Save the original status for validation of permissions.
-  $original_status = $node->status;
-  $node->status = $publish;
-
-  $node->title = blogapi_blogger_extract_title($content);
-  $node->body[LANGUAGE_NONE][0]['value'] = $content;
-
-  module_invoke_all('blogapi_node_edit', $node);
-
-  $valid = blogapi_status_error_check($node, $original_status);
-  if ($valid !== TRUE) {
-    return services_error($valid['message'], $valid['error_code']);
-  }
-
-  node_validate($node);
-  if ($errors = form_get_errors()) {
-    return services_error(implode("; ", $errors), 409);
-  }
-
-  if (user_access('administer nodes') && !isset($edit['date'])) {
-    $node->date = format_date($node->created, 'custom', 'Y-m-d H:i:s O');
-  }
-  $node = node_submit($node);
-  node_save($node);
-  if ($node->nid) {
-    watchdog('content', '@type: updated %title using Blog API.', array('@type' => $node->type, '%title' => $node->title), WATCHDOG_NOTICE, l(t('view'), "node/$node->nid"));
-    return TRUE;
-  }
-
-  return services_error(t('Error storing post.'), 500);
+  return blogapi_edit_post($postid, $username, $password, $content, $publish);
 }
 
 /**
@@ -500,10 +406,6 @@ function blogapi_blogger_edit_post($appid, $postid, $username, $password, $conte
 function blogapi_blogger_get_post($appid, $postid, $username, $password) {
   // Validate the user.
   $user = blogapi_validate_user($username, $password);
-  if (is_array($user)) {
-    // Problem logging in. More specific error is included in $user.
-    return services_error($user['message'], $user['error_code']);
-  }
 
   $node = node_load($postid);
   if (!node_access('view', $node, $user) || !user_access('administer nodes')) {
@@ -519,11 +421,7 @@ function blogapi_blogger_get_post($appid, $postid, $username, $password) {
  */
 function blogapi_blogger_delete_post($appid, $postid, $username, $password, $publish) {
   // Validate the user.
-  $user = blogapi_validate_user($username, $password);
-  if (is_array($user)) {
-    // Problem logging in. More specific error is included in $user.
-    return services_error($user['message'], $user['error_code']);
-  }
+  blogapi_validate_user($username, $password);
 
   node_delete($postid);
   return TRUE;
@@ -533,43 +431,23 @@ function blogapi_blogger_delete_post($appid, $postid, $username, $password, $pub
  * Service callback for blogger.getRecentPosts
  */
 function blogapi_blogger_get_recent_posts($appkey, $blogid, $username, $password, $number_of_posts, $bodies = TRUE) {
-  // Validate the user.
-  $user = blogapi_validate_user($username, $password);
-  if (is_array($user)) {
-    // Problem logging in. More specific error is included in $user.
-    return services_error($user['message'], $user['error_code']);
-  }
-
-  // Validate the content type.
-  $error = blogapi_validate_content_type($blogid);
-  if ($error !== TRUE) {
-    // Return an error if the content type is not configured for use
-    // with BlogAPI.
-    return services_error($error['message'], $error['error_code']);
-  }
-
-  // Get posts.
-  $blogs = blogapi_get_recent_posts($blogid, $user, $number_of_posts);
-
-  $posts = array();
-  foreach ($blogs as $blog) {
-    $posts[] = blogapi_format_post_for_xmlrpc($blog, TRUE);
-  }
-
-  return $posts;
+  return blogapi_get_recent_posts($blogid, $username, $password, $number_of_posts);
 }
 
 /**
  * Extract the node title from the contents field.
  */
-function blogapi_blogger_extract_title(&$contents) {
+function blogapi_blogger_extract_title($contents) {
   if (preg_match('/<title>(.*?)<\/title>/i', $contents, $title)) {
-    $title = strip_tags($title[0]);
-    $contents = preg_replace('/<title>.*?<\/title>/i', '', $contents);
-  }
-  else {
-    list($title, $contents) = explode("\n", $contents, 2);
+    return strip_tags($title[0]);
   }
 
-  return $title;
+  return '';
+}
+
+/**
+ * Extract the node body from the contents field.
+ */
+function blogapi_blogger_extract_body($contents) {
+  return preg_replace('/<title>.*?<\/title>/i', '', $contents);
 }

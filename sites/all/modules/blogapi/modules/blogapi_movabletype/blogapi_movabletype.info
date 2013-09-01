@@ -6,9 +6,9 @@ dependencies[] = xmlrpc_server
 dependencies[] = blogapi
 files[] = blogapi_movabletype.test
 
-; Information added by drupal.org packaging script on 2013-04-11
-version = "7.x-2.x-dev"
+; Information added by drupal.org packaging script on 2013-08-01
+version = "7.x-2.0-rc1"
 core = "7.x"
 project = "blogapi"
-datestamp = "1365683943"
+datestamp = "1375331176"
 

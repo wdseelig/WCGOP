@@ -1,3 +1,3 @@
 <?php
-printf("\nHere we are in the site base and my php code");
+printf("\nHere we are in the edited version of my site base and my php code");
 ?>

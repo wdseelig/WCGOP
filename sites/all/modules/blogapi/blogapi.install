@@ -6,17 +6,9 @@
  */
 
 /**
- * Implements hook_install().
- */
-function blogapi_install() {
-
-}
-
-/**
  * Implements hook_uninstall().
  */
 function blogapi_uninstall() {
-
   // Remove variables.
   variable_del('blogapi_node_types');
   variable_del('blogapi_extensions_default');
@@ -41,6 +33,12 @@ function blogapi_schema() {
       'fid' => array(
         'description' => 'Primary Key: Unique file ID.',
         'type' => 'serial',
+      ),
+      'dfid' => array(
+        'description' => 'The {file_manage}.fid of the file that is associated with the file.',
+        'type' => 'int',
+        'unsigned' => TRUE,
+        'not null' => TRUE,
       ),
       'uid' => array(
         'description' => 'The {users}.uid of the user who is associated with the file.',
