@@ -7660,6 +7660,17 @@ function entity_extract_ids($entity_type, $entity) {
   if (!empty($info['entity keys']['bundle'])) {
     // Explicitly fail for malformed entities missing the bundle property.
     if (!isset($entity->{$info['entity keys']['bundle']}) || $entity->{$info['entity keys']['bundle']} === '') {
+      
+      printf("<br>I am about to throw the EntityMalformedException<br>");
+      printf("<br><br>The value of '$entity->fid' is:  " . $entity->fid);
+      printf("<br><br>Here is the entity ... <br><br>");
+      print_r($entity);
+      printf("<br><br>Here is the entity type...");
+      print_r($entity_type);
+      printf("<br><br>... and here is the info variable");
+      print_r($info);
+      die("<br><br>Quitting just before throwing the exception");
+      
       throw new EntityMalformedException(t('Missing bundle property on entity of type @entity_type.', array('@entity_type' => $entity_type)));
     }
     $bundle = $entity->{$info['entity keys']['bundle']};

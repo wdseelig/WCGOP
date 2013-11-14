@@ -121,6 +121,7 @@
  * @see drupal_build_form()
  */
 function drupal_get_form($form_id) {
+	
   $form_state = array();
 
   $args = func_get_args();
@@ -300,6 +301,7 @@ function drupal_get_form($form_id) {
  * @see drupal_redirect_form()
  */
 function drupal_build_form($form_id, &$form_state) {
+	
   // Ensure some defaults; if already set they will not be overridden.
   $form_state += form_state_defaults();
 
@@ -381,6 +383,9 @@ function drupal_build_form($form_id, &$form_state) {
   // to be re-displayed, or we're in a multi-step workflow and need to display
   // the form's next step. In any case, we have what we need in $form, and can
   // return it for rendering.
+  
+ 
+  
   return $form;
 }
 
@@ -485,6 +490,8 @@ function drupal_rebuild_form($form_id, &$form_state, $old_form = NULL) {
   // Clear out all group associations as these might be different when
   // re-rendering the form.
   $form_state['groups'] = array();
+
+ 
 
   // Return a fully built form that is ready for rendering.
   return form_builder($form_id, $form, $form_state);
@@ -1018,6 +1025,7 @@ function drupal_prepare_form($form_id, &$form, &$form_state) {
     }
   }
 
+
   if (isset($form_id)) {
     $form['form_id'] = array(
       '#type' => 'hidden',
@@ -1082,7 +1090,11 @@ function drupal_prepare_form($form_id, &$form, &$form_state) {
     $hooks[] = 'form_' . $form_state['build_info']['base_form_id'];
   }
   $hooks[] = 'form_' . $form_id;
+ 
+  
   drupal_alter($hooks, $form, $form_state, $form_id);
+  
+  
 }
 
 

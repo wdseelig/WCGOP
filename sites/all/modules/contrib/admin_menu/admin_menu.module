@@ -162,7 +162,7 @@ function admin_menu_page_build(&$page) {
   }
   global $user, $language;
   $path = drupal_get_path('module', 'admin_menu');
-
+ 
   $page['page_bottom']['admin_menu'] = array(
     '#attached' => array(),
   );
