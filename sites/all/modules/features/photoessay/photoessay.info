@@ -66,3 +66,5 @@ features[variable][] = node_submitted_node_gallery_gallery
 features[variable][] = node_submitted_node_gallery_item
 features[views_view][] = galleryofphotos
 features[views_view][] = nodegalleryview
+features[views_view][] = photoessaylist
+features[views_view][] = specificgallery
